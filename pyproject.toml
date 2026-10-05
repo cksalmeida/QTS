@@ -1,0 +1,20 @@
+[project]
+name = "motor-credito"
+version = "0.1.0"
+description = "Motor de aprovação de crédito pessoal — Atividade 1 de QTS"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "--strict-markers"
+markers = [
+    "unit: testes unitários das regras de negócio",
+]
