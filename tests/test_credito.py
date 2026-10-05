@@ -5,8 +5,11 @@ import dataclasses
 import pytest
 
 from app.credito import (
+    Decisao,
     FaixaScore,
+    Motivo,
     SolicitacaoCredito,
+    avaliar_credito,
     calcular_comprometimento,
     calcular_parcela,
     classificar_score,
@@ -286,6 +289,8 @@ def test_solicitacao_credito_fora_do_intervalo_levanta_value_error(
         ("renda_mensal", float("-inf"), "renda_mensal deve ser um número finito"),
         ("valor_solicitado", float("nan"), "valor_solicitado deve ser um número finito"),
         ("valor_solicitado", float("inf"), "valor_solicitado deve ser um número finito"),
+        ("renda_mensal", 10**400, "renda_mensal deve ser um número finito"),
+        ("valor_solicitado", 10**400, "valor_solicitado deve ser um número finito"),
     ],
     ids=[
         "renda_nan",
@@ -293,12 +298,14 @@ def test_solicitacao_credito_fora_do_intervalo_levanta_value_error(
         "renda_infinita_negativa",
         "valor_nan",
         "valor_infinito",
+        "renda_inteiro_gigante",
+        "valor_inteiro_gigante",
     ],
 )
 def test_solicitacao_credito_nao_finito_levanta_value_error(
     campo: str, valor: float, mensagem: str
 ) -> None:
-    """RN01 / PRD 7.3 — NaN e infinito levantam ValueError (error guessing)."""
+    """RN01 / PRD 7.3 — NaN, infinito e inteiros gigantes levantam ValueError."""
     # Arrange
     dados = {**DADOS_VALIDOS, campo: valor}
 
@@ -357,3 +364,135 @@ def test_solicitacao_credito_tipo_invalido_levanta_type_error(
     # Act / Assert
     with pytest.raises(TypeError, match=mensagem):
         SolicitacaoCredito(**dados)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("alteracoes", "decisao", "motivo"),
+    [
+        ({}, Decisao.APROVADO, Motivo.CRITERIOS_ATENDIDOS),
+        ({"possui_restricao": True}, Decisao.REPROVADO, Motivo.RESTRICAO_CADASTRAL),
+        ({"idade": 0}, Decisao.REPROVADO, Motivo.IDADE_NAO_ELEGIVEL),
+        ({"idade": 17}, Decisao.REPROVADO, Motivo.IDADE_NAO_ELEGIVEL),
+        ({"idade": 18}, Decisao.APROVADO, Motivo.CRITERIOS_ATENDIDOS),
+        ({"idade": 75}, Decisao.APROVADO, Motivo.CRITERIOS_ATENDIDOS),
+        ({"idade": 76}, Decisao.REPROVADO, Motivo.IDADE_NAO_ELEGIVEL),
+        ({"idade": 120}, Decisao.REPROVADO, Motivo.IDADE_NAO_ELEGIVEL),
+        ({"score": 299}, Decisao.REPROVADO, Motivo.SCORE_INSUFICIENTE),
+        ({"score": 300}, Decisao.ANALISE_MANUAL, Motivo.SCORE_BAIXO),
+        ({"score": 499}, Decisao.ANALISE_MANUAL, Motivo.SCORE_BAIXO),
+        ({"score": 500}, Decisao.APROVADO, Motivo.CRITERIOS_ATENDIDOS),
+        ({"renda_mensal": 1988.90}, Decisao.APROVADO, Motivo.CRITERIOS_ATENDIDOS),
+        ({"renda_mensal": 1988.88}, Decisao.APROVADO, Motivo.CRITERIOS_ATENDIDOS),
+        (
+            {"renda_mensal": 1988.24},
+            Decisao.ANALISE_MANUAL,
+            Motivo.COMPROMETIMENTO_ELEVADO,
+        ),
+        (
+            {"renda_mensal": 1704.77},
+            Decisao.ANALISE_MANUAL,
+            Motivo.COMPROMETIMENTO_ELEVADO,
+        ),
+        (
+            {"renda_mensal": 1704.28},
+            Decisao.REPROVADO,
+            Motivo.COMPROMETIMENTO_EXCEDIDO,
+        ),
+        (
+            {"possui_restricao": True, "idade": 17, "score": 100},
+            Decisao.REPROVADO,
+            Motivo.RESTRICAO_CADASTRAL,
+        ),
+        (
+            {"idade": 17, "score": 100},
+            Decisao.REPROVADO,
+            Motivo.IDADE_NAO_ELEGIVEL,
+        ),
+        (
+            {"score": 100, "renda_mensal": 100.00},
+            Decisao.REPROVADO,
+            Motivo.SCORE_INSUFICIENTE,
+        ),
+        (
+            {"score": 400, "renda_mensal": 2000.00},
+            Decisao.REPROVADO,
+            Motivo.COMPROMETIMENTO_EXCEDIDO,
+        ),
+        (
+            {"score": 400, "renda_mensal": 2700.00},
+            Decisao.ANALISE_MANUAL,
+            Motivo.SCORE_BAIXO,
+        ),
+        (
+            {
+                "score": 650,
+                "valor_solicitado": 50000.00,
+                "num_parcelas": 6,
+                "renda_mensal": 50000.00,
+            },
+            Decisao.APROVADO,
+            Motivo.CRITERIOS_ATENDIDOS,
+        ),
+    ],
+    ids=[
+        "decisao_exemplo_1_aprovado",
+        "decisao_exemplo_2_restricao",
+        "decisao_idade_0_valida_mas_nao_elegivel",
+        "decisao_idade_17_nao_elegivel",
+        "decisao_idade_18_elegivel",
+        "decisao_idade_75_elegivel",
+        "decisao_idade_76_nao_elegivel",
+        "decisao_idade_120_valida_mas_nao_elegivel",
+        "decisao_score_299_insuficiente",
+        "decisao_score_300_analise_manual",
+        "decisao_score_499_analise_manual",
+        "decisao_score_500_aprovado",
+        "decisao_comprometimento_030_exato_aprovado",
+        "decisao_comprometimento_arredondado_030_aprovado",
+        "decisao_comprometimento_03001_analise_manual",
+        "decisao_comprometimento_arredondado_035_analise_manual",
+        "decisao_comprometimento_03501_reprovado",
+        "decisao_prioridade_restricao_sobre_idade_e_score",
+        "decisao_prioridade_idade_sobre_score",
+        "decisao_prioridade_score_insuficiente_sobre_comprometimento",
+        "decisao_prioridade_excedido_sobre_score_baixo",
+        "decisao_prioridade_score_baixo_sobre_elevado",
+        "decisao_valor_maximo_parcelas_minimas_aprovado",
+    ],
+)
+def test_avaliar_credito_decisao_e_motivo(
+    alteracoes: dict[str, float | int | bool], decisao: Decisao, motivo: Motivo
+) -> None:
+    """RN06 e RN07 — decisão e motivo, limites e prioridade entre regras."""
+    # Arrange
+    solicitacao = SolicitacaoCredito(**{**DADOS_VALIDOS, **alteracoes})
+
+    # Act
+    resultado = avaliar_credito(solicitacao)
+
+    # Assert
+    assert resultado.decisao is decisao
+    assert resultado.motivo is motivo
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "argumento",
+    [
+        None,
+        dict(DADOS_VALIDOS),
+    ],
+    ids=[
+        "avaliar_none",
+        "avaliar_dict_com_dados_validos",
+    ],
+)
+def test_avaliar_credito_argumento_invalido_levanta_type_error(argumento: object) -> None:
+    """PRD seção 4 / 7.3 — argumento que não é SolicitacaoCredito levanta TypeError."""
+    # Arrange
+    # (argumento inválido recebido via parametrize)
+
+    # Act / Assert
+    with pytest.raises(TypeError, match="solicitacao deve ser do tipo SolicitacaoCredito"):
+        avaliar_credito(argumento)  # type: ignore[arg-type]

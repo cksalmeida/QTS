@@ -1,6 +1,6 @@
 # PRD — Motor de Aprovação de Crédito Pessoal
 
-> **Versão:** 1.0
+> **Versão:** 1.1
 > **Autor:** Davi
 > **Disciplina:** Qualidade e Teste de Software (QTS) — Atividade 1
 
@@ -59,6 +59,8 @@ def avaliar_credito(solicitacao: SolicitacaoCredito) -> ResultadoAnalise: ...
 - `Decisao`: `APROVADO`, `ANALISE_MANUAL`, `REPROVADO`
 - `Motivo`: `RESTRICAO_CADASTRAL`, `IDADE_NAO_ELEGIVEL`, `SCORE_INSUFICIENTE`, `COMPROMETIMENTO_EXCEDIDO`, `SCORE_BAIXO`, `COMPROMETIMENTO_ELEVADO`, `CRITERIOS_ATENDIDOS`
 
+`avaliar_credito` levanta `TypeError` se o argumento recebido não for uma `SolicitacaoCredito`.
+
 ## 5. Regras de negócio
 
 ### RN01 — Validação de entrada
@@ -75,6 +77,8 @@ Dados inválidos **não são uma decisão de crédito**: são erros e devem leva
 | `possui_restricao` | `bool` | `True` ou `False` | `TypeError` |
 
 > Observação: em Python, `bool` é subclasse de `int`. Por isso `True`/`False` devem ser rejeitados explicitamente nos campos numéricos.
+
+> Observação: inteiros grandes demais para serem convertidos em ponto flutuante (ex.: `10**400`) são tratados como não finitos e levantam `ValueError`.
 
 ### RN02 — Faixas de score
 
@@ -129,6 +133,8 @@ As regras são avaliadas **na ordem abaixo**; a primeira que se aplicar define o
 | 6 | comprometimento `> 0,30` (e `≤ 0,35`) | `ANALISE_MANUAL` | `COMPROMETIMENTO_ELEVADO` |
 | 7 | nenhuma das anteriores | `APROVADO` | `CRITERIOS_ATENDIDOS` |
 
+Os cálculos das RN03 a RN05 só são executados quando nenhuma das regras 1 a 3 se aplica. Assim, uma solicitação com score `MUITO_BAIXO` nunca chega a pedir taxa de juros.
+
 ## 6. Exemplos
 
 **Exemplo 1 — Aprovado**
@@ -167,7 +173,7 @@ Mesmo perfil do Exemplo 1, mas com `possui_restricao = True`
 
 ### 7.3 Error guessing (entradas inesperadas)
 
-`None`, strings numéricas (`"5000"`), `True`/`False` em campos numéricos, `float("nan")`, `float("inf")`, `float` em campos inteiros (`score = 700.0`), `int` em `possui_restricao` (`1`).
+`None`, strings numéricas (`"5000"`), `True`/`False` em campos numéricos, `float("nan")`, `float("inf")`, `float` em campos inteiros (`score = 700.0`), `int` em `possui_restricao` (`1`), inteiros gigantes em campos numéricos (`10**400`), objetos que não são `SolicitacaoCredito` (`None`, `dict`) em `avaliar_credito`.
 
 ## 8. Requisitos não funcionais
 
@@ -182,3 +188,4 @@ Mesmo perfil do Exemplo 1, mas com `possui_restricao = True`
 | Versão | Data | Descrição |
 |---|---|---|
 | 1.0 | 05/10/2026 | Versão inicial |
+| 1.1 | 05/10/2026 | Achados de auditoria: inteiros gigantes tratados como não finitos; `avaliar_credito` valida o tipo do argumento; explicitado que as RN03 a RN05 só são calculadas após as regras 1 a 3 |

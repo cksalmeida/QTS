@@ -107,6 +107,8 @@ pyproject.toml
   e aguarde aprovação.
 - Ao concluir uma tarefa, faça um **resumo curto do que foi feito e do que o
   usuário deve revisar**, para registro no `AI_USAGE.md`.
+- Não crie, copie nem altere arquivos fora da pasta do projeto. A IA pode
+  **sugerir** sabotagens para a auditoria, mas a execução é feita pelo usuário.
 
 ## 9. Auditoria humana
 

@@ -50,11 +50,17 @@ def _validar_campo_inteiro(campo: str, valor: object, minimo: int, maximo: int) 
 def _validar_campo_numerico(campo: str, valor: object) -> None:
     """Valida campo numérico: tipo int ou float (nunca bool) e finitude (RN01).
 
-    O intervalo é validado à parte, pois varia entre os campos numéricos.
+    Inteiros grandes demais para virar float (ex.: 10**400) são tratados como
+    não finitos (RN01, PRD v1.1). O intervalo é validado à parte, pois varia
+    entre os campos numéricos.
     """
     if isinstance(valor, bool) or not isinstance(valor, (int, float)):
         raise TypeError(f"{campo} deve ser do tipo int ou float")
-    if not math.isfinite(valor):
+    try:
+        finito = math.isfinite(valor)
+    except OverflowError:
+        finito = False
+    if not finito:
         raise ValueError(f"{campo} deve ser um número finito")
 
 
@@ -144,3 +150,44 @@ def calcular_comprometimento(parcela: float, renda_mensal: float) -> float:
     e parcela calculada conforme RN04.
     """
     return round(parcela / renda_mensal, 4)
+
+
+def _idade_elegivel(idade: int) -> bool:
+    """Indica se a idade está entre 18 e 75 anos, inclusive (RN06).
+
+    Pré-condição: idade já validada conforme RN01.
+    """
+    return 18 <= idade <= 75
+
+
+def avaliar_credito(solicitacao: SolicitacaoCredito) -> ResultadoAnalise:
+    """Decide o pedido de crédito aplicando as regras na ordem da RN07.
+
+    Usa a elegibilidade por idade (RN06) e só calcula taxa, parcela e
+    comprometimento (RN03 a RN05) depois das regras 1 a 3 (PRD v1.1).
+    Levanta TypeError se o argumento não for uma SolicitacaoCredito.
+    """
+    if not isinstance(solicitacao, SolicitacaoCredito):
+        raise TypeError("solicitacao deve ser do tipo SolicitacaoCredito")
+
+    if solicitacao.possui_restricao:
+        return ResultadoAnalise(Decisao.REPROVADO, Motivo.RESTRICAO_CADASTRAL)
+    if not _idade_elegivel(solicitacao.idade):
+        return ResultadoAnalise(Decisao.REPROVADO, Motivo.IDADE_NAO_ELEGIVEL)
+    faixa = classificar_score(solicitacao.score)
+    if faixa is FaixaScore.MUITO_BAIXO:
+        return ResultadoAnalise(Decisao.REPROVADO, Motivo.SCORE_INSUFICIENTE)
+
+    taxa = obter_taxa_juros(faixa)
+    parcela = calcular_parcela(
+        solicitacao.valor_solicitado, taxa, solicitacao.num_parcelas
+    )
+    comprometimento = calcular_comprometimento(parcela, solicitacao.renda_mensal)
+
+    if comprometimento > 0.35:
+        return ResultadoAnalise(Decisao.REPROVADO, Motivo.COMPROMETIMENTO_EXCEDIDO)
+    if faixa is FaixaScore.BAIXO:
+        return ResultadoAnalise(Decisao.ANALISE_MANUAL, Motivo.SCORE_BAIXO)
+    if comprometimento > 0.30:
+        return ResultadoAnalise(Decisao.ANALISE_MANUAL, Motivo.COMPROMETIMENTO_ELEVADO)
+    return ResultadoAnalise(Decisao.APROVADO, Motivo.CRITERIOS_ATENDIDOS)
