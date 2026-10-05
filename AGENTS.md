@@ -81,7 +81,9 @@ pyproject.toml
 6. Cada teste (ou grupo parametrizado) indica no docstring a regra que verifica
    (ex.: `"""RN02 — limites entre faixas de score."""`).
 7. Testes de decisão verificam **decisão e motivo**, não só a decisão.
-8. Comparações com `float` usam `pytest.approx`.
+8. Comparações com `float` usam `pytest.approx` com tolerância absoluta
+   (`abs=1e-9`). A tolerância relativa padrão não é usada, porque cresce com
+   o valor e pode esconder diferenças de centavos.
 9. Testes de exceção usam `pytest.raises(..., match=...)` para conferir também a mensagem.
 10. Testes não têm lógica própria (`if`, laços) e são independentes entre si.
 11. Os **valores esperados** vêm do PRD, calculados de forma independente —

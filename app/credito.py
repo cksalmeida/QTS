@@ -1,5 +1,6 @@
 """Regras de negócio do motor de aprovação de crédito. Ver PRD.md."""
 
+import math
 from dataclasses import dataclass
 from enum import Enum
 
@@ -33,11 +34,36 @@ class Motivo(Enum):
     CRITERIOS_ATENDIDOS = "CRITERIOS_ATENDIDOS"
 
 
+def _validar_intervalo(campo: str, valor: float, minimo: float, maximo: float) -> None:
+    """Exige que o valor esteja entre mínimo e máximo, inclusive (RN01)."""
+    if not minimo <= valor <= maximo:
+        raise ValueError(f"{campo} deve estar entre {minimo} e {maximo}")
+
+
+def _validar_campo_inteiro(campo: str, valor: object, minimo: int, maximo: int) -> None:
+    """Valida campo inteiro: tipo int (nunca bool) e depois intervalo (RN01)."""
+    if isinstance(valor, bool) or not isinstance(valor, int):
+        raise TypeError(f"{campo} deve ser do tipo int")
+    _validar_intervalo(campo, valor, minimo, maximo)
+
+
+def _validar_campo_numerico(campo: str, valor: object) -> None:
+    """Valida campo numérico: tipo int ou float (nunca bool) e finitude (RN01).
+
+    O intervalo é validado à parte, pois varia entre os campos numéricos.
+    """
+    if isinstance(valor, bool) or not isinstance(valor, (int, float)):
+        raise TypeError(f"{campo} deve ser do tipo int ou float")
+    if not math.isfinite(valor):
+        raise ValueError(f"{campo} deve ser um número finito")
+
+
 @dataclass(frozen=True)
 class SolicitacaoCredito:
     """Pedido de crédito e perfil do solicitante (PRD seção 4).
 
-    A validação dos campos (RN01) ainda não está implementada.
+    Os campos são validados na criação do objeto, conforme a RN01: uma
+    solicitação inválida levanta TypeError ou ValueError e nunca chega a existir.
     """
 
     renda_mensal: float
@@ -46,6 +72,19 @@ class SolicitacaoCredito:
     valor_solicitado: float
     num_parcelas: int
     possui_restricao: bool
+
+    def __post_init__(self) -> None:
+        """Valida os campos na ordem de declaração: tipo, finitude, intervalo (RN01)."""
+        _validar_campo_numerico("renda_mensal", self.renda_mensal)
+        if self.renda_mensal <= 0:
+            raise ValueError("renda_mensal deve ser maior que zero")
+        _validar_campo_inteiro("score", self.score, 0, 1000)
+        _validar_campo_inteiro("idade", self.idade, 0, 120)
+        _validar_campo_numerico("valor_solicitado", self.valor_solicitado)
+        _validar_intervalo("valor_solicitado", self.valor_solicitado, 500, 50000)
+        _validar_campo_inteiro("num_parcelas", self.num_parcelas, 6, 48)
+        if not isinstance(self.possui_restricao, bool):
+            raise TypeError("possui_restricao deve ser do tipo bool")
 
 
 @dataclass(frozen=True)
