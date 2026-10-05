@@ -31,7 +31,7 @@ resultado. A especificação completa está no [`PRD.md`](PRD.md).
 ## Como rodar
 
 ```bash
-git clone <url-do-repositório>
+git clone https://github.com/cksalmeida/QTS.git
 cd AT1-QTS
 uv sync
 ```
